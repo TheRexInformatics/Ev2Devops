@@ -6,7 +6,7 @@ COPY Springboot-API-REST/ .
 RUN mvn clean package -DskipTests
 
 # Stage 2: Runtime
-FROM openjdk:17-jdk-alpine
+FROM eclipse-temurin:17-jdk-alpine
 WORKDIR /app
 RUN addgroup -S springgroup && adduser -S springuser -G springgroup
 USER springuser
