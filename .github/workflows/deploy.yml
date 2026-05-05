@@ -1,4 +1,4 @@
-name: CI/CD Pipeline Innovatech
+name: Deploy InnovaTech
 
 on:
   push:
@@ -8,63 +8,41 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout del código
         uses: actions/checkout@v3
 
-      - name: Login to Docker Hub
+      - name: Login en Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build & Push Images
         run: |
-          # Construimos las imágenes
-          docker compose build
-          
-          # Taggeamos usando el nombre que Docker Compose asigna por defecto (basado en la carpeta del repo)
-          # Según tu log anterior, el prefijo es 'ev2devops'
-          docker tag ev2devops-frontend ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest
-          docker tag ev2devops-back-ventas ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest
-          docker tag ev2devops-back-despachos ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest
-          
-          # Subimos a Docker Hub
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest
+          # 1. Construir las imágenes con el tag que espera tu Docker Hub
+          docker build -t rexdeadx/innovatech-front:latest ./frontend
+          docker build -t rexdeadx/innovatech-ventas:latest ./back-ventas
+          docker build -t rexdeadx/innovatech-despachos:latest ./back-despachos
 
-  deploy:
+          # 2. Subirlas (Aquí es donde fallaba antes porque el nombre no coincidía)
+          docker push rexdeadx/innovatech-front:latest
+          docker push rexdeadx/innovatech-ventas:latest
+          docker push rexdeadx/innovatech-despachos:latest
+
+  deploy-to-ec2:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code (Necesario para copiar el compose)
-        uses: actions/checkout@v3
-
-      - name: Copy docker-compose.yml to EC2
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "/home/${{ secrets.EC2_USER }}/app"
-
-      - name: Executing remote ssh commands to deploy
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/${{ secrets.EC2_USER }}/app
-            
-            # Reemplazar las imágenes locales en el docker-compose.yml por las de Docker Hub antes de levantar
-            # Esto asegura que la EC2 use lo que acabas de subir
-            sed -i 's|build: ./front_despacho|image: ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest|g' docker-compose.yml
-            sed -i 's|build: ./back-Ventas_SpringBoot|image: ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest|g' docker-compose.yml
-            sed -i 's|build: ./back-Despachos_SpringBoot|image: ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest|g' docker-compose.yml
-            
-            # Limpiar y levantar
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f
+            cd ~/app
+            git pull origin deploy
+            # Limpieza de volúmenes para el cambio de Postgres a MySQL
+            sg docker -c "docker-compose down -v"
+            sg docker -c "docker-compose pull"
+            sg docker -c "docker-compose up -d"
