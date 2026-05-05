@@ -1,44 +1,49 @@
 services:
-  # Base de datos con volumen nombrado para persistencia (IE3)
   db:
     image: postgres:15-alpine
+    container_name: innovatech_db
     environment:
       POSTGRES_DB: innovatech_db
       POSTGRES_PASSWORD: password123
     volumes:
-      - db_data:/var/lib/postgresql/data # Requerimiento de persistencia (cite: 33, 98)
+      - db_data:/var/lib/postgresql/data
     networks:
       - back-net
 
-  # Microservicio Ventas
   back-ventas:
     build: ./back-Ventas_SpringBoot
+    container_name: back-ventas
     depends_on:
       - db
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/innovatech_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password123
     networks:
       - back-net
 
-  # Microservicio Despachos
   back-despachos:
     build: ./back-Despachos_SpringBoot
+    container_name: back-despachos
     depends_on:
       - db
     networks:
       - back-net
 
-  # Frontend expuesto (IE5)
   frontend:
     build: ./front_despacho
+    container_name: frontend-innovatech
     ports:
-      - "80:80" # Accesible vía IP pública (cite: 56, 121)
+      - "80:80"
+    depends_on:
+      - back-ventas
+      - back-despachos
     networks:
       - back-net
 
-# Definición de volumen nombrado (Justificación: mayor control que bind mounts) (cite: 35, 99)
 volumes:
   db_data:
 
 networks:
   back-net:
+    driver: bridge
