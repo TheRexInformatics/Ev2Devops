@@ -19,10 +19,16 @@ jobs:
 
       - name: Build & Push Images
         run: |
+          # Construimos las imágenes
           docker compose build
-          docker tag innovatech-frontend ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest
-          docker tag innovatech-back-ventas ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest
-          docker tag innovatech-back-despachos ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest
+          
+          # Taggeamos usando el nombre que Docker Compose asigna por defecto (basado en la carpeta del repo)
+          # Según tu log anterior, el prefijo es 'ev2devops'
+          docker tag ev2devops-frontend ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest
+          docker tag ev2devops-back-ventas ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest
+          docker tag ev2devops-back-despachos ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest
+          
+          # Subimos a Docker Hub
           docker push ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest
           docker push ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest
           docker push ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest
@@ -31,19 +37,34 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to EC2 via SSH
+      - name: Checkout code (Necesario para copiar el compose)
+        uses: actions/checkout@v3
+
+      - name: Copy docker-compose.yml to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/home/${{ secrets.EC2_USER }}/app"
+
+      - name: Executing remote ssh commands to deploy
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            mkdir -p /home/${{ secrets.EC2_USER }}/app
             cd /home/${{ secrets.EC2_USER }}/app
-            # Eliminar archivos viejos y crear el nuevo docker-compose.yml en el servidor
-            cat <<EOF > docker-compose.yml
-            $(cat docker-compose.yml)
-            EOF
-            # Actualizar imágenes y levantar
+            
+            # Reemplazar las imágenes locales en el docker-compose.yml por las de Docker Hub antes de levantar
+            # Esto asegura que la EC2 use lo que acabas de subir
+            sed -i 's|build: ./front_despacho|image: ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-front:latest|g' docker-compose.yml
+            sed -i 's|build: ./back-Ventas_SpringBoot|image: ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-ventas:latest|g' docker-compose.yml
+            sed -i 's|build: ./back-Despachos_SpringBoot|image: ${{ secrets.DOCKER_HUB_USERNAME }}/innovatech-despachos:latest|g' docker-compose.yml
+            
+            # Limpiar y levantar
             docker compose pull
-            docker compose up -d --remove-orphansgit add .
+            docker compose up -d --remove-orphans
+            docker image prune -f
