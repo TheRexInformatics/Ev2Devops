@@ -1,38 +1,56 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: mysql:8.0
     container_name: innovatech_db
+    restart: always
     environment:
-      POSTGRES_DB: innovatech_db
-      POSTGRES_PASSWORD: password123
+      - MYSQL_DATABASE=innovatech_db
+      - MYSQL_ROOT_PASSWORD=password123
+    ports:
+      - "3306:3306"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/mysql
     networks:
       - back-net
 
   back-ventas:
-    build: ./back-Ventas_SpringBoot
+    image: rexdeadx/innovatech-ventas:latest
     container_name: back-ventas
+    restart: always
     depends_on:
       - db
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/innovatech_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password123
+      - DB_ENDPOINT=db
+      - DB_PORT=3306
+      - DB_NAME=innovatech_db
+      - DB_USERNAME=root
+      - DB_PASSWORD=password123
+    ports:
+      - "8080:8080"
     networks:
       - back-net
 
   back-despachos:
-    build: ./back-Despachos_SpringBoot
+    image: rexdeadx/innovatech-despachos:latest
     container_name: back-despachos
+    restart: always
     depends_on:
       - db
+    environment:
+      - DB_ENDPOINT=db
+      - DB_PORT=3306
+      - DB_NAME=innovatech_db
+      - DB_USERNAME=root
+      - DB_PASSWORD=password123
+    ports:
+      - "8081:8081"
     networks:
       - back-net
 
   frontend:
-    build: ./front_despacho
+    image: rexdeadx/innovatech-front:latest
     container_name: frontend-innovatech
+    restart: always
     ports:
       - "80:80"
     depends_on:
@@ -46,4 +64,3 @@ volumes:
 
 networks:
   back-net:
-    driver: bridge
