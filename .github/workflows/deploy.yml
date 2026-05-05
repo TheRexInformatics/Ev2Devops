@@ -19,12 +19,12 @@ jobs:
 
       - name: Build & Push Images
         run: |
-          # Construcción de imágenes
-          docker build -t rexdeadx/innovatech-front:latest ./frontend
-          docker build -t rexdeadx/innovatech-ventas:latest ./back-ventas
-          docker build -t rexdeadx/innovatech-despachos:latest ./back-despachos
+          # CONSTRUCCIÓN - ASEGÚRATE QUE EL NOMBRE DE LA CARPETA SEA IDÉNTICO
+          docker build -t rexdeadx/innovatech-front:latest ./Front-End
+          docker build -t rexdeadx/innovatech-ventas:latest ./back-Ventas_SpringBoot
+          docker build -t rexdeadx/innovatech-despachos:latest ./back-DESPACHOS_SpringBoot
 
-          # Push a Docker Hub
+          # PUSH A DOCKER HUB
           docker push rexdeadx/innovatech-front:latest
           docker push rexdeadx/innovatech-ventas:latest
           docker push rexdeadx/innovatech-despachos:latest
@@ -42,6 +42,7 @@ jobs:
           script: |
             cd ~/app
             git pull origin deploy
+            # Limpieza total para cambiar de Postgres a MySQL
             sg docker -c "docker-compose down -v"
             sg docker -c "docker-compose pull"
             sg docker -c "docker-compose up -d"
