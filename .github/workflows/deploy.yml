@@ -19,10 +19,12 @@ jobs:
 
       - name: Build & Push Images
         run: |
+          # Construcción con rutas exactas de tu VS Code
           docker build -t rexdeadx/innovatech-front:latest ./front_despacho
           docker build -t rexdeadx/innovatech-ventas:latest ./back-Ventas_SpringBoot
           docker build -t rexdeadx/innovatech-despachos:latest ./back-Despachos_SpringBoot
 
+          # Subida a Docker Hub
           docker push rexdeadx/innovatech-front:latest
           docker push rexdeadx/innovatech-ventas:latest
           docker push rexdeadx/innovatech-despachos:latest
@@ -41,6 +43,7 @@ jobs:
           script: |
             cd ~/app
             git pull origin deploy
+            # Limpieza de volúmenes para forzar el cambio a MySQL
             sg docker -c "docker-compose down -v"
             sg docker -c "docker-compose pull"
             sg docker -c "docker-compose up -d"
