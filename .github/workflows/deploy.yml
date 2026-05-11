@@ -19,7 +19,7 @@ jobs:
 
       - name: Build & Push Images
         run: |
-          # Construcción con rutas exactas de tu VS Code
+          # Construcción con rutas exactas
           docker build -t rexdeadx/innovatech-front:latest ./front_despacho
           docker build -t rexdeadx/innovatech-ventas:latest ./back-Ventas_SpringBoot
           docker build -t rexdeadx/innovatech-despachos:latest ./back-Despachos_SpringBoot
@@ -33,17 +33,64 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
+      # ---------------------------------------------------
+      # 1. DESPLIEGUE DEL FRONTEND (En la Subred Pública)
+      # ---------------------------------------------------
+      - name: Deploy Frontend
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.EC2_FRONTEND_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            cd ~/app
-            git pull origin deploy
-            # Limpieza de volúmenes para forzar el cambio a MySQL
-            sg docker -c "docker-compose down -v"
-            sg docker -c "docker-compose pull"
-            sg docker -c "docker-compose up -d"
+            # Bajar última imagen
+            sudo docker pull rexdeadx/innovatech-front:latest
+            
+            # Limpiar versión anterior
+            sudo docker stop front-app || true
+            sudo docker rm front-app || true
+            
+            # Correr contenedor exponiendo el puerto 80
+            sudo docker run -d -p 80:80 --name front-app rexdeadx/innovatech-front:latest
+
+      # ---------------------------------------------------
+      # 2. DESPLIEGUE DEL BACK Y BD (A través del Puente)
+      # ---------------------------------------------------
+      - name: Deploy Backend & MySQL
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_BACKEND_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          # Aquí ocurre la magia del salto
+          proxy_host: ${{ secrets.EC2_FRONTEND_HOST }}
+          proxy_username: ${{ secrets.EC2_USER }}
+          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Bajar últimas imágenes de las APIs
+            sudo docker pull rexdeadx/innovatech-ventas:latest
+            sudo docker pull rexdeadx/innovatech-despachos:latest
+
+            # 2.1 Levantar Base de Datos (MySQL)
+            sudo docker stop mysql-db || true
+            sudo docker rm mysql-db || true
+            # Nota: Ajusta MYSQL_ROOT_PASSWORD según lo que use tu código Java
+            sudo docker run -d -p 3306:3306 --name mysql-db \
+              -e MYSQL_ROOT_PASSWORD=root \
+              -e MYSQL_DATABASE=innovatech mysql:8.0
+
+            # 2.2 Levantar API de Ventas (Puerto 8080)
+            sudo docker stop api-ventas || true
+            sudo docker rm api-ventas || true
+            sudo docker run -d -p 8080:8080 --name api-ventas \
+              --link mysql-db:mysql \
+              rexdeadx/innovatech-ventas:latest
+
+            # 2.3 Levantar API de Despachos (Puerto 8081)
+            sudo docker stop api-despachos || true
+            sudo docker rm api-despachos || true
+            sudo docker run -d -p 8081:8081 --name api-despachos \
+              --link mysql-db:mysql \
+              rexdeadx/innovatech-despachos:latest
